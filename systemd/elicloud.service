@@ -1,0 +1,18 @@
+[Unit]
+Description=EliCloud Flask Application
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor=/mnt/elicloud
+
+[Service]
+Type=simple
+User=eliasthompson
+Group=eliasthompson
+WorkingDirectory=/home/eliasthompson/dashboard
+ExecStart=/home/eliasthompson/dashboard/.venv/bin/gunicorn --workers 2 --bind 127.0.0.1:5000 app:app
+Restart=on-failure
+RestartSec=5
+EnvironmentFile=/etc/elicloud.env
+
+[Install]
+WantedBy=multi-user.target

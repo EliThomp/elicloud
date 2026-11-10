@@ -1,0 +1,103 @@
+table ip elicloud {
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		oifname "wlan1" masquerade
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+		iifname "wlan0" oifname "wlan1" accept
+		iifname "wlan1" oifname "wlan0" ct state established,related accept
+	}
+}
+table ip filter {
+	chain ts-input {
+		ip saddr 100.99.61.16 iifname "lo" counter packets 0 bytes 0 accept
+		iifname "tailscale0" counter packets 83 bytes 11875 accept
+		udp dport 41641 counter packets 6476 bytes 774944 accept
+		ip saddr 100.115.92.0/23 iifname != "tailscale0" counter packets 0 bytes 0 return
+		ip saddr 100.64.0.0/10 iifname != "tailscale0" counter packets 0 bytes 0 drop
+	}
+
+	chain ts-forward {
+		iifname "tailscale0" counter packets 0 bytes 0 meta mark set mark and 0xff00ffff xor 0x40000
+		meta mark & 0x00ff0000 == 0x00040000 counter packets 0 bytes 0 accept
+		ip saddr 100.64.0.0/10 oifname "tailscale0" counter packets 0 bytes 0 drop
+		oifname "tailscale0" counter packets 0 bytes 0 accept
+	}
+
+	chain INPUT {
+		type filter hook input priority filter; policy accept;
+		counter packets 344722 bytes 62146078 jump ts-input
+	}
+
+	chain FORWARD {
+		type filter hook forward priority filter; policy accept;
+		counter packets 0 bytes 0 jump ts-forward
+	}
+}
+table ip nat {
+	chain ts-postrouting {
+		meta mark & 0x00ff0000 == 0x00040000 counter packets 0 bytes 0 masquerade
+	}
+
+	chain POSTROUTING {
+		type nat hook postrouting priority srcnat; policy accept;
+		counter packets 7236 bytes 653783 jump ts-postrouting
+	}
+}
+table ip6 filter {
+	chain ts-input {
+		ip6 saddr fd7a:115c:a1e0::4e01:3dd4 iifname "lo" counter packets 0 bytes 0 accept
+		iifname "tailscale0" counter packets 0 bytes 0 accept
+		udp dport 41641 counter packets 0 bytes 0 accept
+	}
+
+	chain ts-forward {
+		iifname "tailscale0" counter packets 0 bytes 0 meta mark set mark and 0xff00ffff xor 0x40000
+		meta mark & 0x00ff0000 == 0x00040000 counter packets 0 bytes 0 accept
+		oifname "tailscale0" counter packets 0 bytes 0 accept
+	}
+
+	chain INPUT {
+		type filter hook input priority filter; policy accept;
+		counter packets 63621 bytes 4682325 jump ts-input
+	}
+
+	chain FORWARD {
+		type filter hook forward priority filter; policy accept;
+		counter packets 0 bytes 0 jump ts-forward
+	}
+}
+table ip6 nat {
+	chain ts-postrouting {
+		meta mark & 0x00ff0000 == 0x00040000 counter packets 0 bytes 0 xt target "MASQUERADE"
+	}
+
+	chain POSTROUTING {
+		type nat hook postrouting priority srcnat; policy accept;
+		counter packets 94 bytes 9936 jump ts-postrouting
+	}
+}
+table ip mangle {
+	chain PREROUTING {
+		type filter hook prerouting priority mangle; policy accept;
+		ct state related,established ct mark and 0xff0000 != 0x0 counter packets 35981 bytes 3000453 meta mark set ct mark and 0xff0000
+	}
+
+	chain OUTPUT {
+		type route hook output priority mangle; policy accept;
+		ct state new meta mark & 0x00ff0000 != 0x00000000 counter packets 1560 bytes 111807 ct mark set mark and 0xff0000
+	}
+}
+table ip6 mangle {
+	chain PREROUTING {
+		type filter hook prerouting priority mangle; policy accept;
+		ct state related,established ct mark and 0xff0000 != 0x0 counter packets 0 bytes 0 meta mark set ct mark and 0xff0000
+	}
+
+	chain OUTPUT {
+		type route hook output priority mangle; policy accept;
+		ct state new meta mark & 0x00ff0000 != 0x00000000 counter packets 0 bytes 0 ct mark set mark and 0xff0000
+	}
+}

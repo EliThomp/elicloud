@@ -1,0 +1,86 @@
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>EliCloud</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="sidebar">
+
+        <img
+            src="{{ url_for('static', filename='logo.png') }}"
+            class="logo"
+        >
+
+        <h1>Eli<span>Cloud</span></h1>
+
+        <a href="/" class="nav-link">
+            <span class="nav-icon">⌂</span>
+            <span>Home</span>
+        </a>
+
+        <a href="/dashboard" class="nav-link">
+            <span class="nav-icon">▦</span>
+            <span>Dashboard</span>
+        </a>
+
+        <a href="/files" class="nav-link">
+            <span class="nav-icon">▭</span>
+            <span>Files</span>
+        </a>
+
+        <a href="/media" class="nav-link">
+            <span class="nav-icon">▷</span>
+            <span>Media</span>
+        </a>
+
+        <a href="/services" class="nav-link">
+            <span class="nav-icon">▤</span>
+            <span>Services</span>
+        </a>
+
+        <a href="/settings" class="nav-link">
+            <span class="nav-icon">⚙</span>
+            <span>Settings</span>
+        </a>
+        <form action="{{ url_for('logout') }}" method="POST" class="logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <button type="submit" class="logout-button">
+                <span class="logout-icon">↪</span>
+                <span>Logout</span>
+            </button>
+        </form>
+        <div class="status-box">
+
+            <p>🟢 System Online</p>
+
+            <p>🌐 Internet Connected</p>
+
+        </div>
+
+    </div>
+
+
+    <div class="main-content">
+
+        {% block content %}
+        {% endblock %}
+
+    </div>
+
+</div>
+
+</body>
+
+</html>

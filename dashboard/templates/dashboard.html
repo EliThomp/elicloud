@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>EliCloud <span class="blue">Dashboard</span></h1>
+
+<p class="subtitle">
+    Firing On All Cylinders
+</p>
+
+<h2 class="section-title">System</h2>
+<div class="stats-grid">
+
+    <div class="stat-card">
+        <div class="stat-icon">🌡</div>
+        <p class="stat-label">CPU Temperature</p>
+        <h2>{{ cpu_temp }}°C</h2>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">▤</div>
+        <p class="stat-label">Memory Usage</p>
+        <h2>{{ ram_percent }}%</h2>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">◫</div>
+        <p class="stat-label">Disk Usage</p>
+        <h2>{{ disk_percent }}%</h2>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">◷</div>
+        <p class="stat-label">System Uptime</p>
+        <h2>{{ uptime_hours }} hrs</h2>
+    </div>
+
+
+    <div class="nvme-card">
+        <h2>Storage</h2>
+
+        {% if nvme_total != "N/A" %}
+
+        <h3>{{ nvme_free }} GB Available</h3>
+
+        <p>
+            {{ nvme_used }} GB used /
+            {{ nvme_total }} GB total
+        </p>
+
+        <div class="nvme-progress">
+            <div class="nvme-progress-fill"
+                 style="width: {{ nvme_percent }}%;">
+            </div>
+        </div>
+
+        <p>{{ nvme_percent }}% Used</p>
+
+        {% else %}
+
+        <p>SSD unavailable or not mounted.</p>
+
+        {% endif %}
+    </div>
+
+
+</div>
+
+<h2 class="section-title">Network</h2>
+
+<div class="stats-grid">
+
+    <div class="stat-card">
+        <div class="stat-icon">🌐</div>
+        <p class="stat-label">Internet</p>
+
+        {% if internet_status == "Online" %}
+            <h2 class="status-online">● Online</h2>
+        {% else %}
+            <h2 class="status-offline">● Offline</h2>
+        {% endif %}
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">📡</div>
+        <p class="stat-label">EliCloud LAN</p>
+        <h2>{{ lan_ip }}</h2>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">💻</div>
+        <p class="stat-label">Connected Devices</p>
+        <h2>{{ connected_clients }}</h2>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">↗</div>
+        <p class="stat-label">IP Forwarding</p>
+
+        {% if forwarding_status == "Enabled" %}
+            <h2 class="status-online">● Enabled</h2>
+        {% else %}
+            <h2 class="status-offline">● {{ forwarding_status }}</h2>
+        {% endif %}
+    </div>
+
+</div>
+
+<h2 class="section-title">Tailscale</h2>
+
+<div class="tailscale-stats">
+
+    <div class="stat-card">
+        <p class="stat-label">Devices</p>
+        <h2>{{ tailscale_devices | length }}</h2>
+    </div>
+
+    <div class="stat-card">
+        <p class="stat-label">Online Devices</p>
+        <h2>
+            {{ tailscale_devices
+               | selectattr('online')
+               | list
+               | length }}
+        </h2>
+    </div>
+
+</div>
+
+<div class="device-table-container">
+
+    <table class="device-table">
+
+        <thead>
+            <tr>
+                <th>Device</th>
+                <th>Operating System</th>
+                <th>Tailscale IP</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for device in tailscale_devices %}
+
+            <tr>
+                <td>{{ device.name }}</td>
+
+                <td>{{ device.os | capitalize }}</td>
+
+                <td>{{ device.ip }}</td>
+
+                <td>
+                    {% if device.online %}
+                        <span class="status-online">● Online</span>
+                    {% else %}
+                        <span class="status-offline">● Offline</span>
+                    {% endif %}
+                </td>
+            </tr>
+
+            {% else %}
+
+            <tr>
+                <td colspan="4">
+                    No Tailscale devices available.
+                </td>
+            </tr>
+
+            {% endfor %}
+        </tbody>
+
+    </table>
+
+</div>
+
+<h2 class="section-title">Connected Devices</h2>
+
+<div class="device-table-container">
+
+    <table class="device-table">
+
+        <thead>
+            <tr>
+                <th>Device</th>
+                <th>IP Address</th>
+                <th>MAC Address</th>
+                <th>Signal</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% for device in devices %}
+
+            <tr>
+                <td>
+                    <span class="device-online">●</span>
+                    {{ device.hostname }}
+                </td>
+
+                <td>{{ device.ip }}</td>
+
+                <td>{{ device.mac }}</td>
+
+                <td>{{ device.signal }}</td>
+            </tr>
+
+            {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,667 @@
+body {
+
+    margin:0;
+
+    background:#F5F7FB;
+
+    font-family:
+
+        -apple-system,
+
+        BlinkMacSystemFont,
+
+        sans-serif;
+
+}
+
+
+.container {
+
+    display:flex;
+
+}
+
+
+.sidebar {
+
+    width:280px;
+
+    min-height:100vh;
+
+    background:white;
+
+    padding:30px;
+
+    box-shadow:
+
+        0px 0px 30px
+
+        rgba(0,0,0,0.05);
+
+}
+
+
+.logo {
+    width: 180px;
+    height: 180px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto 25px auto;
+}
+
+.sidebar h1 {
+
+    text-align:center;
+
+}
+
+
+.sidebar h1 span {
+
+    color:#1E6EFF;
+
+}
+
+.sidebar a {
+
+    display:block;
+
+    padding:18px;
+
+    margin-top:12px;
+
+    text-decoration:none;
+
+    color:black;
+
+    border-radius:16px;
+
+}
+
+
+.sidebar a:hover {
+
+    background:#EEF4FF;
+
+}
+
+
+.status-box {
+
+    margin-top:50px;
+
+    background:#F7F9FC;
+
+    padding:20px;
+
+    border-radius:20px;
+
+}
+
+
+.main-content {
+
+    flex:1;
+
+    padding:60px;
+
+}
+
+
+.blue {
+
+    color:#1E6EFF;
+
+}
+
+
+.subtitle {
+
+    color:gray;
+
+    margin-bottom:50px;
+
+}
+
+
+.card-grid {
+
+    display:grid;
+
+    gap:30px;
+
+    grid-template-columns:
+
+        repeat(
+
+            auto-fit,
+
+            minmax(300px,1fr)
+
+        );
+
+}
+
+
+.feature-card {
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 28px;
+    padding: 44px 34px;
+    min-height: 230px;
+    text-align: center;
+    text-decoration: none;
+    color: #0f172a;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    transition: 0.2s ease;
+}
+
+.feature-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 24px 55px rgba(37, 99, 235, 0.16);
+}
+
+.icon-box {
+    width: 92px;
+    height: 92px;
+    border-radius: 28px;
+    margin: 0 auto 22px auto;
+    background: linear-gradient(145deg, #eef4ff, #f8fbff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;
+    box-shadow: inset 0 0 20px rgba(37, 99, 235, 0.08);
+}
+
+.feature-card h2 {
+    font-size: 26px;
+    margin-bottom: 14px;
+}
+
+.feature-card p {
+    color: #475569;
+    line-height: 1.6;
+    margin-bottom: 28px;
+}
+
+.feature-card button {
+    background: linear-gradient(135deg, #2563eb, #007aff);
+    color: white;
+    border: none;
+    padding: 13px 28px;
+    border-radius: 10px;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.28);
+}
+
+.feature-card button:hover {
+    background: linear-gradient(135deg, #1d4ed8, #0066dd);
+}
+
+.nav-link {
+
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    padding: 18px;
+    margin-top: 12px;
+
+    text-decoration: none;
+
+    color: #000000;
+
+    border-radius: 16px;
+
+    transition: all 0.2s ease;
+
+}
+
+
+.nav-link:hover {
+
+    color: #2563EB;
+
+    background: #EEF4FF;
+
+}
+
+
+.nav-icon {
+
+    width: 24px;
+    text-align: center;
+
+    font-size: 18px;
+
+    color: inherit;
+
+}
+
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 24px;
+}
+
+
+.stat-card {
+    background: white;
+    border-radius: 24px;
+    padding: 30px;
+    box-shadow: 0 12px 35px rgba(15, 23, 42, 0.07);
+    border: 1px solid #e9eef5;
+    transition: 0.2s ease;
+}
+
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 40px rgba(37, 99, 235, 0.12);
+}
+
+
+.stat-icon {
+    font-size: 30px;
+    margin-bottom: 20px;
+}
+
+
+.stat-label {
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+
+.stat-card h2 {
+    font-size: 30px;
+    margin: 0;
+    color: #0f172a;
+}
+
+.section-title {
+    margin-top: 50px;
+    margin-bottom: 24px;
+    font-size: 26px;
+}
+
+.status-online {
+    color: #16a34a !important;
+}
+
+.status-offline {
+    color: #dc2626 !important;
+}
+.section-title {
+    margin-top: 50px;
+    margin-bottom: 24px;
+    font-size: 26px;
+}
+
+.status-online {
+    color: #16a34a !important;
+}
+
+.status-offline {
+    color: #dc2626 !important;
+}
+
+.device-table-container {
+    background: white;
+    border-radius: 24px;
+    padding: 10px 25px;
+    box-shadow: 0 12px 35px rgba(15, 23, 42, 0.07);
+    border: 1px solid #e9eef5;
+    overflow-x: auto;
+}
+
+.device-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.device-table th {
+    text-align: left;
+    padding: 20px 15px;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 600;
+    border-bottom: 1px solid #e9eef5;
+}
+
+.device-table td {
+    padding: 20px 15px;
+    color: #0f172a;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.device-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.device-table tbody tr:hover {
+    background: #f8faff;
+}
+
+.device-online {
+    color: #16a34a;
+    margin-right: 8px;
+}
+
+
+/* EliCloud File Manager */
+
+.files-page {
+    max-width: 1100px;
+}
+
+.storage-card,
+.upload-card,
+.file-list {
+    background: #ffffff;
+    padding: 24px;
+    margin-top: 24px;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+}
+
+.storage-card h2,
+.upload-card h2,
+.file-list h2 {
+    margin-top: 0;
+}
+
+.upload-card form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.upload-card button {
+    background: #007aff;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.upload-card button:hover {
+    background: #005ecb;
+}
+
+.files-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.files-table th,
+.files-table td {
+    padding: 14px;
+    text-align: left;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.files-table a {
+    color: #007aff;
+    text-decoration: none;
+}
+
+.files-table a:hover {
+    text-decoration: underline;
+}
+
+
+/* NVMe Storage Card */
+
+.nvme-card {
+    background: #ffffff;
+    padding: 24px;
+    border-radius: 12px;
+    margin-top: 20px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+}
+
+.nvme-card h2 {
+    margin-top: 0;
+}
+
+.nvme-card h3 {
+    color: #007aff;
+    font-size: 26px;
+    margin-bottom: 8px;
+}
+
+.nvme-progress {
+    width: 100%;
+    height: 12px;
+    background: #e5e5e5;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.nvme-progress-fill {
+    height: 100%;
+    background: #007aff;
+    border-radius: 8px;
+    transition: width 0.3s ease;
+}
+
+/* Sidebar logout button */
+
+.logout-form {
+    margin-top: 20px;
+    width: 100%;
+}
+
+.logout-button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: #64748b;
+    font-size: 14px;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.logout-button:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.logout-icon {
+    font-size: 19px;
+}
+
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    background: linear-gradient(145deg, #edf5ff, #f8fafc);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.login-page .login-card {
+    width: 100%;
+    max-width: 390px;
+    padding: 40px 36px;
+    background: white;
+    border: 1px solid #e7edf5;
+    border-radius: 22px;
+    box-shadow: 0 20px 60px rgba(35, 65, 110, 0.09);
+}
+
+.login-page .login-button {
+    width: 100%;
+    margin-top: 20px;
+    padding: 14px;
+    border: none;
+    border-radius: 11px;
+    background: #1479ed;
+    color: white;
+    cursor: pointer;
+}
+
+.login-page .login-button:hover {
+    background: #0868d5;
+}
+
+.login-page .login-card {
+    box-sizing: border-box;
+    margin: 20px;
+    color: #172b4d;
+}
+
+.login-page .login-logo {
+    text-align: center;
+    font-size: 48px;
+    color: #1479ed;
+    margin-bottom: 12px;
+}
+
+.login-page h1 {
+    text-align: center;
+    font-size: 30px;
+    margin: 0;
+}
+
+.login-page .login-subtitle {
+    text-align: center;
+    font-size: 14px;
+    color: #7a8ba3;
+    margin: 10px 0 32px;
+}
+
+.login-page label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 9px;
+}
+
+.login-page .password-input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 14px;
+    border: 1px solid #dce5f0;
+    border-radius: 11px;
+    font-size: 14px;
+    outline: none;
+}
+
+.login-page .password-input:focus {
+    border-color: #1479ed;
+    box-shadow: 0 0 0 4px rgba(20, 121, 237, 0.1);
+}
+
+.login-page .login-button {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.login-page .login-error {
+    padding: 12px;
+    margin-bottom: 18px;
+    background: #fff1f2;
+    color: #be123c;
+    border-radius: 9px;
+    font-size: 13px;
+}
+
+.login-page .login-footer {
+    margin-top: 30px;
+    text-align: center;
+    font-size: 12px;
+    color: #9aabc0;
+}
+
+.tailscale-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.tailscale-stats .stat-card {
+    flex: 0 0 180px;
+    padding: 16px;
+    min-height: auto;
+}
+
+.tailscale-stats .stat-card h2 {
+    font-size: 24px;
+    margin: 8px 0 0;
+}
+
+.tailscale-stats .stat-icon {
+    font-size: 20px;
+}
+
+.draggable-file {
+    cursor: grab;
+}
+
+.draggable-file:active {
+    cursor: grabbing;
+}
+
+.draggable-file.dragging {
+    opacity: 0.4;
+}
+
+.folder-drop-zone {
+    transition: background-color 0.2s ease;
+}
+
+.folder-drop-zone.drop-target {
+    background-color: rgba(59, 130, 246, 0.18);
+    outline: 2px dashed #3b82f6;
+    outline-offset: -2px;
+}
+
+.draggable-item {
+    cursor: grab;
+}
+
+.draggable-item.dragging {
+    opacity: 0.4;
+}
+
+.folder-drop-zone,
+.navigation-drop-zone {
+    transition: background-color 0.2s ease;
+}
+
+.drop-target {
+    background-color: rgba(59, 130, 246, 0.18);
+    outline: 2px dashed #3b82f6;
+    outline-offset: -2px;
+}
+
+.navigation-drop-zones {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.navigation-drop-zone {
+    padding: 12px 16px;
+    border: 1px dashed #64748b;
+    border-radius: 8px;
+    cursor: default;
+}

@@ -1,0 +1,67 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In | EliCloud</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body class="login-page">
+
+    <div class="login-card">
+
+        <div class="login-logo">
+            ☁
+        </div>
+
+        <h1>EliCloud</h1>
+
+        <p class="login-subtitle">
+            Personal Cloud. Accessible Everywhere *relatively*
+        </p>
+
+        {% for message in get_flashed_messages() %}
+            <div class="login-error">
+                {{ message }}
+            </div>
+        {% endfor %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+
+            <input type="hidden"
+                   name="csrf_token"
+                   value="{{ csrf_token() }}">
+
+            <label for="password">
+                Administrator Password
+            </label>
+
+            <input
+                type="password"
+                id="password"
+                name="password"
+                class="password-input"
+                placeholder="Enter your password"
+                autocomplete="current-password"
+                required
+                autofocus
+            >
+
+            <button type="submit" class="login-button">
+                Sign In →
+            </button>
+
+        </form>
+
+        <p class="login-footer">
+            Private Access · Powered by EliCloud
+        </p>
+
+    </div>
+
+</body>
+</html>

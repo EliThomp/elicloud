@@ -1,0 +1,284 @@
+
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="files-page">
+
+    <h1>File Manager</h1>
+    <p>My Own Personal Vault</p>
+
+    <!-- STORAGE INFORMATION -->
+    <div class="storage-card">
+        <h2>NVMe Storage</h2>
+
+        <p>
+            Storage location:
+            /mnt/elicloud/uploads
+            {% if current_folder %}
+                /{{ current_folder }}
+            {% endif %}
+        </p>
+
+        <p>
+            {{ folders|length }} folders,
+            {{ files|length }} files
+        </p>
+    </div>
+
+    <!-- FOLDER CREATION -->
+    <div class="upload-card">
+        <h2>Create New Folder</h2>
+
+        <form action="{{ url_for('create_folder') }}"
+              method="POST">
+
+            <input type="hidden"
+                   name="csrf_token"
+                   value="{{ csrf_token() }}">
+
+            <input type="hidden"
+                   name="folder"
+                   value="{{ current_folder }}">
+
+            <input type="text"
+                   name="folder_name"
+                   placeholder="Enter folder name"
+                   maxlength="100"
+                   required>
+
+            <button type="submit">
+                Create Folder
+            </button>
+
+        </form>
+    </div>
+
+    <!-- FILE UPLOAD -->
+    <div class="upload-card">
+        <h2>Upload Files</h2>
+
+        <form action="{{ url_for('upload_file') }}"
+              method="POST"
+              enctype="multipart/form-data">
+
+            <input type="hidden"
+                   name="csrf_token"
+                   value="{{ csrf_token() }}">
+
+            <input type="hidden"
+                   name="folder"
+                   value="{{ current_folder }}">
+
+            <input type="file"
+                   name="file"
+                   required>
+
+            <button type="submit">
+                Upload to EliCloud
+            </button>
+
+        </form>
+
+        <p>
+            Supports images, videos, documents,
+            and other file formats.
+            Maximum upload size: 100 MB.
+        </p>
+    </div>
+
+    <!-- FILE AND FOLDER LIST -->
+    <div class="file-list">
+        <h2>Stored Files</h2>
+
+        <!-- NAVIGATION -->
+        {% if current_folder %}
+        <p>
+            <a href="{{ url_for('files',
+                               folder=parent_folder) }}">
+                ← Back to Parent Folder
+            </a>
+        </p>
+        {% endif %}
+
+        <table class="files-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Size</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+        <!-- FOLDERS -->
+        
+	{% for folder in folders %}
+	<tr class="folder-drop-zone draggable-item"
+    	    draggable="true"
+    	    data-path="{{ folder.path }}"
+    	    data-type="folder"
+    	    data-folder="{{ folder.path }}">
+
+       	    <td>📁 {{ folder.name }}</td>
+    	    <td>Folder</td>
+
+    	    <td>
+                <a href="{{ url_for('files', folder=folder.path) }}">
+                Open
+                </a>
+    	    </td>
+	</tr>
+	{% endfor %}
+
+
+                <!-- FILES -->                
+        <div class="navigation-drop-zones">
+
+            {% if current_folder %}
+
+            <div class="navigation-drop-zone"
+                data-folder="{{ parent_folder }}">
+                ⬆ Move to Parent Folder
+            </div>
+
+	    <div class="navigation-drop-zone"
+                data-folder="">
+                🏠 Move to Cloud Root
+    	    </div>
+
+            {% endif %}
+
+	</div>
+
+	{% for file in files %}
+	<tr class="draggable-item"
+    	    draggable="true"
+    	    data-path="{{ file.path }}"
+    	    data-type="file">
+
+    	    <td>📄 {{ file.name }}</td>
+    	    <td>{{ file.size }} MB</td>
+
+    	    <td>
+                <a href="{{ url_for('download_file',
+                                   filename=file.path) }}">
+                    Download
+                </a>
+    	    </td>
+	</tr>
+	{% endfor %}
+	
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const items = document.querySelectorAll(".draggable-item");
+
+    const targets = document.querySelectorAll(
+        ".folder-drop-zone, .navigation-drop-zone"
+    );
+
+    let draggedItem = null;
+
+    items.forEach(item => {
+        item.addEventListener("dragstart", event => {
+            draggedItem = {
+                path: item.dataset.path,
+                type: item.dataset.type
+            };
+
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData(
+                "text/plain",
+                draggedItem.path
+            );
+
+            item.classList.add("dragging");
+        });
+
+        item.addEventListener("dragend", () => {
+            item.classList.remove("dragging");
+            draggedItem = null;
+        });
+    });
+
+    targets.forEach(target => {
+        target.addEventListener("dragover", event => {
+            if (!draggedItem) return;
+
+            const destination = target.dataset.folder;
+
+            if (
+                destination === draggedItem.path ||
+                destination.startsWith(draggedItem.path + "/")
+            ) return;
+
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            target.classList.add("drop-target");
+        });
+
+        target.addEventListener("dragleave", () => {
+            target.classList.remove("drop-target");
+        });
+
+        target.addEventListener("drop", async event => {
+            if (!draggedItem) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            target.classList.remove("drop-target");
+
+            const source = draggedItem.path;
+            const destination = target.dataset.folder;
+
+            if (
+                destination === source ||
+                destination.startsWith(source + "/")
+            ) {
+                alert("Cannot move an item into itself.");
+                return;
+            }
+
+            const itemName = source.split("/").pop();
+            const destinationName = destination || "Cloud Root";
+
+            if (!confirm(
+                `Move ${itemName} to ${destinationName}?`
+            )) return;
+
+            try {
+                const response = await fetch(
+                    "{{ url_for('move_file') }}",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": "{{ csrf_token() }}"
+                        },
+                        credentials: "same-origin",
+                        body: JSON.stringify({
+                            source: source,
+                            destination: destination
+                        })
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Move failed (HTTP ${response.status})`
+                    );
+                }
+
+                window.location.reload();
+
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+    });
+});
+</script>
+
+{% endblock %}

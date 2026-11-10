@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EliCloud Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <h1>EliCloud Dashboard</h1>
+
+    <div class="grid">
+
+        <div class="card">
+            <h2>System</h2>
+            <p><b>Hostname:</b> {{ data.hostname }}</p>
+            <p><b>Time:</b> {{ data.current_time }}</p>
+            <p><b>Uptime:</b> {{ data.uptime }}</p>
+        </div>
+
+        <div class="card">
+            <h2>Hardware</h2>
+            <p><b>Temperature:</b> {{ data.temp }}</p>
+            <pre>Memory:
+{{ data.memory }}</pre>
+            <pre>Disk:
+{{ data.disk }}</pre>
+        </div>
+
+        <div class="card">
+            <h2>Network</h2>
+            <p><b>SSID:</b> EliCloud</p>
+            <p><b>Gateway:</b> 192.168.4.1</p>
+            <p><b>Subnet:</b> 192.168.4.0/24</p>
+        </div>
+
+        <div class="card">
+            <h2>Services</h2>
+
+            {% if data.hostapd == "active" %}
+                <p class="online">● hostapd Online</p>
+            {% else %}
+                <p class="offline">● hostapd Offline</p>
+            {% endif %}
+
+            {% if data.dnsmasq == "active" %}
+                <p class="online">● dnsmasq Online</p>
+            {% else %}
+                <p class="offline">● dnsmasq Offline</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Router Status</h2>
+
+            {% if data.routing == "1" %}
+                <p class="online">● IP Forwarding Enabled</p>
+            {% else %}
+                <p class="offline">● IP Forwarding Disabled</p>
+            {% endif %}
+
+            {% if data.internet_status == "Online" %}
+                <p class="online">● Internet Online</p>
+            {% else %}
+                <p class="offline">● Internet Offline</p>
+            {% endif %}
+
+            <p><b>Internet Interface:</b></p>
+            <pre>{{ data.internet_ip }}</pre>
+        </div>
+
+        <div class="card wide">
+            <h2>Routing Table</h2>
+            <pre>{{ data.routes }}</pre>
+        </div>
+
+        <div class="card wide">
+            <h2>Connected Devices</h2>
+            <pre>{{ data.leases }}</pre>
+        </div>
+
+    </div>
+</body>
+</html>
+
