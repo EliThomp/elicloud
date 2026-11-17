@@ -8,6 +8,10 @@
     <h1>File Manager</h1>
     <p>My Own Personal Vault</p>
 
+    {% for message in get_flashed_messages() %}
+        <div class="files-flash">{{ message }}</div>
+    {% endfor %}
+
     <!-- STORAGE INFORMATION -->
     <div class="storage-card">
         <h2>NVMe Storage</h2>
@@ -72,6 +76,7 @@
 
             <input type="file"
                    name="file"
+                   multiple
                    required>
 
             <button type="submit">
@@ -81,9 +86,10 @@
         </form>
 
         <p>
-            Supports images, videos, documents,
-            and other file formats.
-            Maximum upload size: 100 MB.
+            Select one or more files of any type.
+            Existing files are never overwritten.
+            Maximum size per upload: {{ max_upload_mb }} MB
+            (all selected files combined).
         </p>
     </div>
 
@@ -100,6 +106,24 @@
             </a>
         </p>
         {% endif %}
+
+        <div class="navigation-drop-zones">
+
+            {% if current_folder %}
+
+            <div class="navigation-drop-zone"
+                data-folder="{{ parent_folder }}">
+                ⬆ Move to Parent Folder
+            </div>
+
+	    <div class="navigation-drop-zone"
+                data-folder="">
+                🏠 Move to Cloud Root
+    	    </div>
+
+            {% endif %}
+
+	</div>
 
         <table class="files-table">
             <thead>
@@ -128,30 +152,14 @@
                 <a href="{{ url_for('files', folder=folder.path) }}">
                 Open
                 </a>
+                <button type="button" class="row-action" data-action="rename" data-path="{{ folder.path }}" data-name="{{ folder.name }}">Rename</button>
+                <button type="button" class="row-action danger" data-action="delete" data-path="{{ folder.path }}" data-name="{{ folder.name }}">Delete</button>
     	    </td>
 	</tr>
 	{% endfor %}
 
 
                 <!-- FILES -->                
-        <div class="navigation-drop-zones">
-
-            {% if current_folder %}
-
-            <div class="navigation-drop-zone"
-                data-folder="{{ parent_folder }}">
-                ⬆ Move to Parent Folder
-            </div>
-
-	    <div class="navigation-drop-zone"
-                data-folder="">
-                🏠 Move to Cloud Root
-    	    </div>
-
-            {% endif %}
-
-	</div>
-
 	{% for file in files %}
 	<tr class="draggable-item"
     	    draggable="true"
@@ -166,13 +174,74 @@
                                    filename=file.path) }}">
                     Download
                 </a>
+                <button type="button" class="row-action" data-action="rename" data-path="{{ file.path }}" data-name="{{ file.name }}">Rename</button>
+                <button type="button" class="row-action danger" data-action="delete" data-path="{{ file.path }}" data-name="{{ file.name }}">Delete</button>
     	    </td>
 	</tr>
 	{% endfor %}
 	
 
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+    async function postJson(url, payload) {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token() }}"
+            },
+            credentials: "same-origin",
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            let message = `Request failed (HTTP ${response.status})`;
+
+            try {
+                const body = await response.json();
+                if (body.error) message = body.error;
+            } catch (ignored) {}
+
+            throw new Error(message);
+        }
+    }
+
+    document.querySelectorAll(".row-action").forEach(button => {
+        button.addEventListener("click", async event => {
+            event.stopPropagation();
+
+            const { action, path, name } = button.dataset;
+
+            try {
+                if (action === "rename") {
+                    const newName = prompt(`Rename \u201c${name}\u201d to:`, name);
+
+                    if (newName === null || newName.trim() === "" || newName === name) {
+                        return;
+                    }
+
+                    await postJson("{{ url_for('rename_item') }}", { path, name: newName });
+                } else if (action === "delete") {
+                    if (!confirm(`Move \u201c${name}\u201d to the trash?`)) {
+                        return;
+                    }
+
+                    await postJson("{{ url_for('delete_item') }}", { path });
+                }
+
+                window.location.reload();
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+    });
+
     const items = document.querySelectorAll(".draggable-item");
 
     const targets = document.querySelectorAll(
@@ -249,30 +318,12 @@ document.addEventListener("DOMContentLoaded", () => {
             )) return;
 
             try {
-                const response = await fetch(
-                    "{{ url_for('move_file') }}",
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-CSRFToken": "{{ csrf_token() }}"
-                        },
-                        credentials: "same-origin",
-                        body: JSON.stringify({
-                            source: source,
-                            destination: destination
-                        })
-                    }
-                );
-
-                if (!response.ok) {
-                    throw new Error(
-                        `Move failed (HTTP ${response.status})`
-                    );
-                }
+                await postJson("{{ url_for('move_file') }}", {
+                    source: source,
+                    destination: destination
+                });
 
                 window.location.reload();
-
             } catch (error) {
                 alert(error.message);
             }

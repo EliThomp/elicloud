@@ -4,10 +4,11 @@ from flask import (
     abort, session, flash
 )
 from flask_wtf.csrf import CSRFProtect
+from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
-from werkzeug.utils import secure_filename
 from functools import wraps
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 import os
@@ -18,28 +19,45 @@ import subprocess
 import ctypes
 import errno
 import stat
+import shutil
+import unicodedata
+import uuid
 from contextlib import contextmanager
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 
-# Secure session cookies
-app.config["SESSION_COOKIE_SECURE"] = True
-app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# The app is only reachable through `tailscale serve`, which terminates HTTPS
+# and proxies to 127.0.0.1:5000. Trust exactly one proxy hop so the client IP
+# (used for rate limiting) and the scheme come from the forwarded headers.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-#Folder Upload
-UPLOAD_FOLDER = Path("/mnt/elicloud/uploads")
+# Storage
+STORAGE_MOUNT = Path(os.environ.get("ELICLOUD_STORAGE_MOUNT", "/mnt/elicloud"))
+UPLOAD_FOLDER = STORAGE_MOUNT / "uploads"
+TRASH_NAME = ".trash"
+DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+COPY_CHUNK = 1024 * 1024
+
+
+def storage_mounted():
+    return STORAGE_MOUNT.is_mount()
+
 
 # Authentication configuration
 app.config.update(
     SECRET_KEY=os.environ["ELICLOUD_SECRET_KEY"],
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=False,  # Local HTTP testing only
+    # Secure by default. Set ELICLOUD_COOKIE_SECURE=0 only for plain-HTTP
+    # local testing.
+    SESSION_COOKIE_SECURE=os.environ.get("ELICLOUD_COOKIE_SECURE", "1") != "0",
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
-    WTF_CSRF_TIME_LIMIT=3600,
+    WTF_CSRF_TIME_LIMIT=None,  # CSRF token lives as long as the session
+    MAX_CONTENT_LENGTH=(
+        int(os.environ.get("ELICLOUD_MAX_UPLOAD_MB", "100")) * 1024 * 1024
+    ),
 )
 
 ADMIN_HASH = os.environ["ELICLOUD_ADMIN_HASH"]
@@ -49,9 +67,19 @@ csrf = CSRFProtect(app)
 limiter = Limiter(
     key_func=get_remote_address,
     app=app,
-    storage_uri="redis://127.0.0.1:6379/0",
+    storage_uri=os.environ.get(
+        "ELICLOUD_LIMITER_URI", "redis://127.0.0.1:6379/0"
+    ),
     default_limits=[]
 )
+
+
+@app.errorhandler(HTTPException)
+def json_errors(error):
+    # Fetch/XHR callers send JSON and get a readable message back.
+    if request.is_json:
+        return {"error": error.description}, error.code
+    return error
 
 # Tailscale Device Connection
 def get_tailscale_devices():
@@ -104,6 +132,33 @@ _renameat2.restype = ctypes.c_int
 RENAME_NOREPLACE = 1
 
 
+def clean_name(raw, basename_only=False):
+    """Validate a user-supplied file or folder name, keeping Unicode.
+
+    Returns the normalized name or None. Names starting with "." are
+    rejected so nobody can create, reach, or overwrite the .trash folder.
+    """
+    if not isinstance(raw, str):
+        return None
+
+    name = unicodedata.normalize("NFC", raw).strip()
+
+    if basename_only:
+        name = name.replace("\\", "/").rsplit("/", 1)[-1].strip()
+    elif "/" in name or "\\" in name:
+        return None
+
+    if (
+        not name
+        or name.startswith(".")
+        or len(name.encode("utf-8")) > 255
+        or any(unicodedata.category(ch).startswith("C") for ch in name)
+    ):
+        return None
+
+    return name
+
+
 def split_storage_path(value):
     if not isinstance(value, str) or not value:
         abort(400, description="Invalid storage path")
@@ -113,24 +168,70 @@ def split_storage_path(value):
 
     parts = value.split("/")
 
-    if any(part in ("", ".", "..") for part in parts):
+    if any(part == "" or part.startswith(".") for part in parts):
         abort(400, description="Invalid storage path")
 
     return parts
 
 
+def rename_noreplace(src_fd, src_name, dst_fd, dst_name):
+    result = _renameat2(
+        src_fd, os.fsencode(src_name),
+        dst_fd, os.fsencode(dst_name),
+        RENAME_NOREPLACE
+    )
+
+    if result == 0:
+        return
+
+    error = ctypes.get_errno()
+
+    if error == errno.EEXIST:
+        abort(409, description="Destination already exists")
+
+    if error == errno.ENOENT:
+        abort(404, description="File or folder not found")
+
+    if error in (errno.EACCES, errno.EPERM):
+        abort(403, description="Permission denied")
+
+    if error == errno.EINVAL:
+        abort(400, description="Invalid folder move")
+
+    if error == errno.EXDEV:
+        abort(400, description="Cannot move across storage devices")
+
+    raise OSError(error, os.strerror(error))
+
+
+def require_item(dir_fd, name):
+    try:
+        info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        abort(404, description="Item not found")
+
+    if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
+        abort(400, description="Unsupported item type")
+
+
 @contextmanager
 def open_storage_directory(parts):
-    if not Path("/mnt/elicloud").is_mount():
+    if not storage_mounted():
         abort(503, description="NVMe storage unavailable")
 
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-
-    fd = os.open(UPLOAD_FOLDER, flags)
+    fd = os.open(UPLOAD_FOLDER, DIR_FLAGS)
 
     try:
         for part in parts:
-            next_fd = os.open(part, flags, dir_fd=fd)
+            try:
+                next_fd = os.open(part, DIR_FLAGS, dir_fd=fd)
+            except (FileNotFoundError, NotADirectoryError):
+                abort(404, description="Folder not found")
+            except OSError as error:
+                if error.errno == errno.ELOOP:
+                    abort(400, description="Invalid folder")
+                raise
+
             os.close(fd)
             fd = next_fd
 
@@ -175,8 +276,6 @@ def logout():
     return redirect(url_for("login"))
 
 
-app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB
-
 @app.route("/")
 def home():
     return render_template("home.html")
@@ -204,7 +303,7 @@ def dashboard():
 
     # NVMe SSD Storage
     try:
-        nvme_path = "/mnt/elicloud"
+        nvme_path = str(STORAGE_MOUNT)
 
         if not os.path.ismount(nvme_path):
             raise OSError("NVMe SSD is not mounted")
@@ -346,7 +445,7 @@ def dashboard():
     )
 
 def get_storage_path(folder=""):
-    if not Path("/mnt/elicloud").is_mount():
+    if not storage_mounted():
         abort(503, description="NVMe storage is not mounted")
 
     root = UPLOAD_FOLDER.resolve()
@@ -360,7 +459,8 @@ def get_storage_path(folder=""):
     relative = Path(folder)
 
     if relative.is_absolute() or any(
-        part == ".." for part in relative.parts
+        part == ".." or part.startswith(".")
+        for part in relative.parts
     ):
         abort(400, description="Invalid folder path")
 
@@ -371,12 +471,47 @@ def get_storage_path(folder=""):
 
     return destination
 
+
+def save_upload(upload, destination):
+    """Write one upload without overwriting. Returns None or a reason."""
+    try:
+        fd = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+        )
+    except FileExistsError:
+        return "already exists"
+    except OSError:
+        return "could not be created"
+
+    try:
+        with os.fdopen(fd, "wb") as output:
+            shutil.copyfileobj(upload.stream, output, COPY_CHUNK)
+    except Exception as error:
+        # Never leave a partial file behind (disk full, client disconnect).
+        try:
+            destination.unlink()
+        except OSError:
+            pass
+
+        if isinstance(error, OSError):
+            if error.errno == errno.ENOSPC:
+                return "disk is full"
+            return "could not be written"
+
+        raise
+
+    return None
+
+
 #FILES
 @app.route("/files")
 @login_required
 def files():
     current_folder = request.args.get("folder", "")
     current_path = get_storage_path(current_folder)
+    root = UPLOAD_FOLDER.resolve()
 
     if not current_path.is_dir():
         abort(404, description="Folder not found")
@@ -388,13 +523,13 @@ def files():
         current_path.iterdir(),
         key=lambda p: p.name.lower()
     ):
-        if item.is_symlink():
+        if item.name.startswith(".") or item.is_symlink():
             continue
 
         if item.is_dir():
             folders.append({
                 "name": item.name,
-                "path": item.relative_to(UPLOAD_FOLDER).as_posix()
+                "path": item.relative_to(root).as_posix()
             })
 
         elif item.is_file():
@@ -403,7 +538,7 @@ def files():
                 "size": round(
                     item.stat().st_size / (1024 * 1024), 2
                 ),
-                "path": item.relative_to(UPLOAD_FOLDER).as_posix()
+                "path": item.relative_to(root).as_posix()
             })
 
     parent_folder = ""
@@ -419,31 +554,28 @@ def files():
         files=stored_files,
         folders=folders,
         current_folder=current_folder,
-        parent_folder=parent_folder
+        parent_folder=parent_folder,
+        max_upload_mb=app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
     )
 
 @app.route("/files/folder/create", methods=["POST"])
 @login_required
 def create_folder():
     current_folder = request.form.get("folder", "")
-    folder_name = secure_filename(
-        request.form.get("folder_name", "")
-    )
-
-    if not folder_name or folder_name in {".", ".."}:
-        abort(400, description="Invalid folder name")
+    folder_name = clean_name(request.form.get("folder_name", ""))
 
     parent = get_storage_path(current_folder)
 
     if not parent.is_dir():
         abort(404, description="Parent folder not found")
 
-    destination = parent / folder_name
-
-    try:
-        destination.mkdir(mode=0o700)
-    except FileExistsError:
-        abort(409, description="Folder already exists")
+    if folder_name is None:
+        flash("That folder name isn't allowed.")
+    else:
+        try:
+            (parent / folder_name).mkdir(mode=0o700)
+        except FileExistsError:
+            flash(f"\u201c{folder_name}\u201d already exists.")
 
     return redirect(url_for("files", folder=current_folder))
 
@@ -451,17 +583,16 @@ def create_folder():
 @app.route("/files/upload", methods=["POST"])
 @login_required
 def upload_file():
-    if not UPLOAD_FOLDER.is_mount() and not Path("/mnt/elicloud").is_mount():
+    if not storage_mounted():
         abort(503, description="NVMe storage is not mounted")
 
-    if "file" not in request.files:
+    uploads = [
+        item for item in request.files.getlist("file")
+        if item and item.filename
+    ]
+
+    if not uploads:
         abort(400, description="No file provided")
-
-    uploaded_file = request.files["file"]
-    filename = secure_filename(uploaded_file.filename or "")
-
-    if not filename or filename in {".", ".."}:
-        abort(400, description="Invalid filename")
 
     current_folder = request.form.get("folder", "")
     current_path = get_storage_path(current_folder)
@@ -469,15 +600,24 @@ def upload_file():
     if not current_path.is_dir():
         abort(404, description="Destination folder not found")
 
-    destination = current_path / filename
+    saved = 0
 
-    try:
-        with destination.open("xb") as output:
-            os.chmod(destination, 0o600)
-            uploaded_file.save(output)
+    for upload in uploads:
+        name = clean_name(upload.filename, basename_only=True)
 
-    except FileExistsError:
-        abort(409, description="A file with this name already exists")
+        if name is None:
+            flash(f"Skipped \u201c{upload.filename}\u201d: name not allowed.")
+            continue
+
+        problem = save_upload(upload, current_path / name)
+
+        if problem:
+            flash(f"Skipped \u201c{name}\u201d: {problem}.")
+        else:
+            saved += 1
+
+    if saved:
+        flash(f"Uploaded {saved} file{'s' if saved != 1 else ''}.")
 
     return redirect(url_for("files", folder=current_folder))
 
@@ -489,9 +629,11 @@ def download_file(filename):
     if not requested_path.is_file():
         abort(404, description="File not found")
 
+    root = UPLOAD_FOLDER.resolve()
+
     return send_from_directory(
-        UPLOAD_FOLDER,
-        requested_path.relative_to(UPLOAD_FOLDER).as_posix(),
+        root,
+        requested_path.relative_to(root).as_posix(),
         as_attachment=True
     )
 
@@ -524,49 +666,103 @@ def move_file():
 
     with open_storage_directory(source_parts[:-1]) as source_fd:
         with open_storage_directory(destination_parts) as dest_fd:
-            source_name = source_parts[-1]
+            name = source_parts[-1]
+            require_item(source_fd, name)
+            rename_noreplace(source_fd, name, dest_fd, name)
+
+    return {"success": True}
+
+
+@app.route("/files/rename", methods=["POST"])
+@login_required
+def rename_item():
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        abort(400, description="Invalid JSON")
+
+    parts = split_storage_path(data.get("path"))
+    new_name = clean_name(data.get("name"))
+
+    if new_name is None:
+        abort(400, description="That name isn't allowed")
+
+    if new_name == parts[-1]:
+        abort(400, description="The name is unchanged")
+
+    with open_storage_directory(parts[:-1]) as parent_fd:
+        require_item(parent_fd, parts[-1])
+        rename_noreplace(parent_fd, parts[-1], parent_fd, new_name)
+
+    return {"success": True}
+
+
+def write_trash_meta(entry_fd, original_path, name):
+    meta = {
+        "original_path": original_path,
+        "name": name,
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    fd = os.open(
+        "meta.json",
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        0o600,
+        dir_fd=entry_fd,
+    )
+
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(meta, handle)
+
+
+@app.route("/files/delete", methods=["POST"])
+@login_required
+def delete_item():
+    """Move an item into .trash/<id>/item; nothing is erased."""
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        abort(400, description="Invalid JSON")
+
+    parts = split_storage_path(data.get("path"))
+    name = parts[-1]
+
+    with open_storage_directory(parts[:-1]) as parent_fd:
+        require_item(parent_fd, name)
+
+        with open_storage_directory([]) as root_fd:
+            try:
+                os.mkdir(TRASH_NAME, 0o700, dir_fd=root_fd)
+            except FileExistsError:
+                pass
+
+            trash_fd = os.open(TRASH_NAME, DIR_FLAGS, dir_fd=root_fd)
 
             try:
-                info = os.stat(
-                    source_name,
-                    dir_fd=source_fd,
-                    follow_symlinks=False
-                )
-            except FileNotFoundError:
-                abort(404, description="Source not found")
+                stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+                entry = f"{stamp}-{uuid.uuid4().hex[:8]}"
+                os.mkdir(entry, 0o700, dir_fd=trash_fd)
+                entry_fd = os.open(entry, DIR_FLAGS, dir_fd=trash_fd)
+                moved = False
 
-            if not (
-                stat.S_ISREG(info.st_mode)
-                or stat.S_ISDIR(info.st_mode)
-            ):
-                abort(400, description="Unsupported item type")
+                try:
+                    write_trash_meta(entry_fd, "/".join(parts), name)
+                    rename_noreplace(parent_fd, name, entry_fd, "item")
+                    moved = True
+                finally:
+                    if not moved:
+                        try:
+                            os.unlink("meta.json", dir_fd=entry_fd)
+                        except OSError:
+                            pass
+                        try:
+                            os.rmdir(entry, dir_fd=trash_fd)
+                        except OSError:
+                            pass
 
-            encoded_name = os.fsencode(source_name)
-
-            result = _renameat2(
-                source_fd,
-                encoded_name,
-                dest_fd,
-                encoded_name,
-                RENAME_NOREPLACE
-            )
-
-            if result != 0:
-                error = ctypes.get_errno()
-
-                if error == errno.EEXIST:
-                    abort(409, description="Destination already exists")
-
-                if error == errno.ENOENT:
-                    abort(404, description="File or folder not found")
-
-                if error in (errno.EACCES, errno.EPERM):
-                    abort(403, description="Permission denied")
-
-                if error == errno.EINVAL:
-                    abort(400, description="Invalid folder move")
-
-                raise OSError(error, os.strerror(error))
+                    os.close(entry_fd)
+            finally:
+                os.close(trash_fd)
 
     return {"success": True}
 

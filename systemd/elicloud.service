@@ -1,7 +1,7 @@
 [Unit]
 Description=EliCloud Flask Application
-Wants=network-online.target
-After=network-online.target
+Wants=network-online.target redis-server.service
+After=network-online.target redis-server.service
 RequiresMountsFor=/mnt/elicloud
 
 [Service]
@@ -9,7 +9,7 @@ Type=simple
 User=eliasthompson
 Group=eliasthompson
 WorkingDirectory=/home/eliasthompson/dashboard
-ExecStart=/home/eliasthompson/dashboard/.venv/bin/gunicorn --workers 2 --bind 127.0.0.1:5000 app:app
+ExecStart=/home/eliasthompson/dashboard/.venv/bin/gunicorn --workers 2 --threads 4 --timeout 300 --bind 127.0.0.1:5000 app:app
 Restart=on-failure
 RestartSec=5
 EnvironmentFile=/etc/elicloud.env

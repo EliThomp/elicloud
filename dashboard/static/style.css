@@ -665,3 +665,39 @@ body {
     border-radius: 8px;
     cursor: default;
 }
+
+
+/* File manager: flash messages and row actions */
+
+.files-flash {
+    padding: 12px 16px;
+    margin: 16px 0;
+    background: #eef6ff;
+    color: #0b4a9e;
+    border-radius: 9px;
+    font-size: 14px;
+}
+
+.files-table .row-action {
+    margin-left: 10px;
+    padding: 4px 10px;
+    background: transparent;
+    color: #007aff;
+    border: 1px solid #c9dcf5;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.files-table .row-action:hover {
+    background: #eef6ff;
+}
+
+.files-table .row-action.danger {
+    color: #be123c;
+    border-color: #f3c4cc;
+}
+
+.files-table .row-action.danger:hover {
+    background: #fff1f2;
+}

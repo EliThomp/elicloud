@@ -33,8 +33,8 @@ Interface names and addresses in `config-examples/` reflect the author's setup. 
 ## Features
 
 - **Dashboard:** CPU temperature, RAM, root and NVMe usage, uptime, internet reachability, IP-forwarding state, currently associated Wi-Fi clients (MAC / IP / hostname / signal, from `iw` + dnsmasq leases), and Tailscale peers.
-- **File manager:** upload, download, create folders, and drag-and-drop move of files and folders.
-- **Authentication:** single administrator account, hashed password, server-side session expiry, CSRF protection on all state-changing requests, login rate limiting (Redis-backed).
+- **File manager:** multi-file upload (Unicode names preserved, never overwrites), download, create folders, rename, drag-and-drop move, and delete-to-trash (items move to a hidden `.trash/` with their original path recorded; nothing is erased).
+- **Authentication:** single administrator account, hashed password, Secure/HttpOnly session cookie with an 8-hour lifetime, CSRF protection on all state-changing requests, login rate limiting (Redis-backed, keyed on the real client IP via one trusted proxy hop).
 - **Safe storage handling:** the app refuses to touch files if `/mnt/elicloud` is not a mount point; moves are done with fd-relative `renameat2(RENAME_NOREPLACE)` and `O_NOFOLLOW`, so they cannot overwrite existing files or follow symlinks out of the storage root.
 
 ## Repository layout
@@ -55,14 +55,14 @@ config-examples/
 
 ## Setup (outline)
 
-Requirements: Raspberry Pi OS (Debian-based), Python 3, a mounted storage volume at `/mnt/elicloud`, Redis on `127.0.0.1:6379`, and the Python packages `flask`, `flask-wtf`, `flask-limiter`, `redis`, `psutil`, `gunicorn`.
+Requirements: Raspberry Pi OS (Debian-based), Python 3, a mounted storage volume at `/mnt/elicloud`, Redis on `127.0.0.1:6379` (`sudo apt install redis-server`), and the packages in `requirements.txt`.
 
 1. Mount the SSD at `/mnt/elicloud` (via `/etc/fstab`) and create `/mnt/elicloud/uploads`.
 2. Copy and adapt the `hostapd`, `dnsmasq`, and `nftables` examples; enable IPv4 forwarding (`net.ipv4.ip_forward=1`).
 3. Create the app environment:
    ```bash
    python3 -m venv ~/dashboard/.venv
-   ~/dashboard/.venv/bin/pip install flask flask-wtf flask-limiter redis psutil gunicorn
+   ~/dashboard/.venv/bin/pip install -r requirements.txt
    ```
 4. Create `/etc/elicloud.env` (mode `600`, owned by root) from `config-examples/elicloud.env.example`. Generate the values with:
    ```bash
@@ -82,19 +82,29 @@ findmnt /mnt/elicloud
 journalctl -u elicloud -n 100 --no-pager
 ```
 
+## Tests
+
+```bash
+pip install -r requirements.txt pytest
+python -m pytest tests
+```
+
+The tests use a temporary directory as storage and an in-memory rate limiter, so they need neither the NVMe drive nor Redis. They cover upload/download integrity, Unicode names, no-overwrite behavior, delete-to-trash, rename, move rules, path traversal, symlink escape, anonymous access, and the unmounted-storage case.
+
 ## Security notes
 
 - Secrets live in `/etc/elicloud.env`, never in the repository. `.gitignore` excludes env files, keys, databases, uploads, and backup files.
-- The gunicorn listener is bound to loopback only; reach it through an SSH tunnel or Tailscale. Do not port-forward it to the public internet.
+- The gunicorn listener is bound to loopback only and is published to the tailnet with `tailscale serve` (HTTPS, tailnet-only). Do not use `tailscale funnel` or port-forward it to the public internet. The app trusts exactly one proxy hop (`ProxyFix`), so it must not be exposed directly to untrusted clients.
 - Never commit a raw `nft list ruleset` dump, `hostapd.conf`, or DHCP lease files.
 
 ## Known limitations
 
 - Single admin account; no per-user permissions yet.
-- No delete or rename operations in the file manager.
+- The trash has no UI yet: restoring or emptying it is done from the shell (`/mnt/elicloud/uploads/.trash/<id>/`, with `meta.json` recording the original path).
+- Uploads are capped per request (default 100 MB) and held in a temporary file first; chunked/resumable uploads are planned.
 - No automated backups or restore procedure yet (a single SSD is not a backup).
 - Media, Services, and Settings pages are placeholders.
-- No automated tests; validation is manual (see the acceptance checklist in the project plan).
+- Automated tests cover the file manager only (see below); network, boot and backup validation is still manual.
 
 ## Roadmap
 
